@@ -16,6 +16,8 @@ import org.mockito.ArgumentCaptor;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -158,6 +160,44 @@ class CourseRegistrationServiceTest {
         );
 
         assertTrue(bodyCaptor.getValue().contains("CS101"));
+    }
+
+
+    // A8: Гурван төрлийн алдааг параметртэй тестээр шалгана.
+    @ParameterizedTest
+    @CsvSource({
+            "inactive, ERROR_INACTIVE_STUDENT",
+            "missing-course, ERROR_NO_COURSE",
+            "missing-prerequisite, ERROR_PREREQUISITES"
+    })
+    void registrationError_scenarioReturnsExpectedError(
+            String scenario,
+            String expected
+    ) {
+        if (scenario.equals("inactive")) {
+            Student inactiveStudent = new Student(
+                    "S001",
+                    "student@example.com",
+                    false,
+                    List.of()
+            );
+            when(repository.findStudent("S001")).thenReturn(inactiveStudent);
+
+        } else if (scenario.equals("missing-course")) {
+            when(repository.findStudent("S001")).thenReturn(activeStudent);
+            when(repository.courseExists("CS101")).thenReturn(false);
+
+        } else if (scenario.equals("missing-prerequisite")) {
+            when(repository.findStudent("S001")).thenReturn(activeStudent);
+            when(repository.courseExists("CS101")).thenReturn(true);
+            when(repository.prerequisites("CS101")).thenReturn(List.of("CS200"));
+        }
+
+        String result = service.register("S001", "CS101");
+
+        assertEquals(expected, result);
+        verify(repository, never()).saveRegistration(anyString(), anyString());
+        verifyNoInteractions(emailSender);
     }
 
 }
