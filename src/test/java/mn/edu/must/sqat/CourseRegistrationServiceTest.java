@@ -1,14 +1,18 @@
 package mn.edu.must.sqat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import org.mockito.ArgumentCaptor;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -102,4 +106,58 @@ class CourseRegistrationServiceTest {
         verify(repository, never()).saveRegistration(anyString(), anyString());
         verifyNoInteractions(emailSender);
     }
+
+    // A5: Email алдаатай байсан ч бүртгэл амжилттай байна.
+    @Test
+    void emailFailure_registrationStillSucceeds() {
+        when(repository.findStudent("S001")).thenReturn(activeStudent);
+        when(repository.courseExists("CS101")).thenReturn(true);
+        when(repository.prerequisites("CS101")).thenReturn(List.of("CS100"));
+
+        doThrow(new RuntimeException("Email service unavailable"))
+                .when(emailSender)
+                .send(anyString(), anyString(), anyString());
+
+        String result = service.register("S001", "CS101");
+
+        assertEquals("OK", result);
+        verify(repository).saveRegistration("S001", "CS101");
+    }
+
+    // A6: Null оролтод exception шидэж, dependency ашиглахгүй.
+    @Test
+    void nullInput_throwsExceptionWithoutDependencyInteractions() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.register(null, "CS101")
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.register("S001", null)
+        );
+
+        verifyNoInteractions(repository, emailSender);
+    }
+
+    // A7: Email body дотор хичээлийн код орсон байна.
+    @Test
+    void successfulRegistration_emailBodyContainsCourseCode() {
+        when(repository.findStudent("S001")).thenReturn(activeStudent);
+        when(repository.courseExists("CS101")).thenReturn(true);
+        when(repository.prerequisites("CS101")).thenReturn(List.of("CS100"));
+
+        service.register("S001", "CS101");
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+
+        verify(emailSender).send(
+                eq("student@example.com"),
+                eq("Бүртгэл баталгаажлаа"),
+                bodyCaptor.capture()
+        );
+
+        assertTrue(bodyCaptor.getValue().contains("CS101"));
+    }
+
 }
